@@ -47,6 +47,9 @@ export function SongCard({ song, onPress, progress = 0 }: Props) {
           {song.title}
         </Text>
         <View style={styles.meta}>
+          <Text style={[styles.yearText, { color: colors.mutedForeground }]}>
+            {song.year}
+          </Text>
           <View style={[styles.badge, { backgroundColor: DIFF_COLORS[song.difficulty] + "22" }]}>
             <Text style={[styles.badgeText, { color: DIFF_COLORS[song.difficulty] }]}>
               {DIFF_LABELS[song.difficulty]}
@@ -110,6 +113,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 10,
     marginTop: 4,
+  },
+  yearText: {
+    fontSize: 11,
+    fontFamily: "Inter_400Regular",
   },
   badge: {
     paddingHorizontal: 8,
