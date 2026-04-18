@@ -1,0 +1,27 @@
+kind = "mobile"
+previewPath = "/"
+title = "Al Shami Music"
+version = "1.0.0"
+id = "artifacts/alshami-music"
+router = "expo-domain"
+
+[[integratedSkills]]
+name = "expo"
+version = "1.0.0"
+
+[[services]]
+ensurePreviewReachable = "/status"
+name = "expo"
+paths = [ "/" ]
+localPort = 23009
+
+[services.development]
+run = "pnpm --filter @workspace/alshami-music run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/alshami-music", "run", "build" ]
+run = [ "pnpm", "--filter", "@workspace/alshami-music", "run", "serve" ]
+
+[services.env]
+PORT = "23009"
+BASE_PATH = "/"
