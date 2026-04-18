@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Animated,
   StyleSheet,
@@ -11,6 +11,11 @@ import { Feather } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
 import { LyricLine } from "@/data/songs";
 
+interface WordItem {
+  word: string;
+  wordIndex: number;
+}
+
 interface Props {
   line: LyricLine;
   onCorrect: () => void;
@@ -19,107 +24,124 @@ interface Props {
   totalLines: number;
 }
 
-function shuffle<T>(arr: T[]): T[] {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
+function shuffleItems(words: string[]): WordItem[] {
+  const items: WordItem[] = words.map((w, i) => ({ word: w, wordIndex: i }));
+  for (let i = items.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
+    [items[i], items[j]] = [items[j], items[i]];
   }
-  return a;
+  return items;
 }
 
-export function WordBrickGame({ line, onCorrect, onComplete, lineIndex, totalLines }: Props) {
+const CORRECT_COLOR = "#58CC02";
+const WRONG_COLOR = "#FF4B4B";
+
+export function WordBrickGame({
+  line,
+  onCorrect,
+  onComplete,
+  lineIndex,
+  totalLines,
+}: Props) {
   const colors = useColors();
 
-  const [available, setAvailable] = useState<string[]>([]);
-  const [placed, setPlaced] = useState<string[]>([]);
+  const [available, setAvailable] = useState<WordItem[]>([]);
+  const [placed, setPlaced] = useState<WordItem[]>([]);
   const [status, setStatus] = useState<"idle" | "correct" | "wrong">("idle");
-  const shakeAnim = useState(() => new Animated.Value(0))[0];
-  const scaleAnim = useState(() => new Animated.Value(1))[0];
+  const shakeAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const bannerAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    setAvailable(shuffle(line.words));
+    setAvailable(shuffleItems(line.words));
     setPlaced([]);
     setStatus("idle");
+    bannerAnim.setValue(0);
   }, [line]);
 
   const shake = useCallback(() => {
     Animated.sequence([
-      Animated.timing(shakeAnim, { toValue: 8, duration: 60, useNativeDriver: true }),
-      Animated.timing(shakeAnim, { toValue: -8, duration: 60, useNativeDriver: true }),
-      Animated.timing(shakeAnim, { toValue: 8, duration: 60, useNativeDriver: true }),
-      Animated.timing(shakeAnim, { toValue: 0, duration: 60, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: 10, duration: 55, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: -10, duration: 55, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: 8, duration: 55, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: 0, duration: 55, useNativeDriver: true }),
     ]).start();
   }, [shakeAnim]);
 
-  const popIn = useCallback(() => {
-    Animated.sequence([
-      Animated.timing(scaleAnim, { toValue: 1.1, duration: 100, useNativeDriver: true }),
-      Animated.timing(scaleAnim, { toValue: 1, duration: 100, useNativeDriver: true }),
-    ]).start();
-  }, [scaleAnim]);
+  const showBanner = useCallback(() => {
+    Animated.spring(bannerAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+      tension: 60,
+      friction: 8,
+    }).start();
+  }, [bannerAnim]);
 
-  const handlePickWord = (word: string, index: number) => {
+  const handlePickWord = (item: WordItem, idx: number) => {
     if (status !== "idle") return;
     const newAvailable = [...available];
-    newAvailable.splice(index, 1);
-    const newPlaced = [...placed, word];
+    newAvailable.splice(idx, 1);
+    const newPlaced = [...placed, item];
     setAvailable(newAvailable);
     setPlaced(newPlaced);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-
     if (newAvailable.length === 0) {
       checkAnswer(newPlaced);
     }
   };
 
-  const handleRemoveWord = (word: string, index: number) => {
+  const handleRemoveWord = (item: WordItem, idx: number) => {
     if (status !== "idle") return;
     const newPlaced = [...placed];
-    newPlaced.splice(index, 1);
+    newPlaced.splice(idx, 1);
     setPlaced(newPlaced);
-    setAvailable([...available, word]);
+    setAvailable([...available, item]);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
-  const checkAnswer = (placedWords: string[]) => {
-    const correct = placedWords.join(" ") === line.words.join(" ");
+  const checkAnswer = (placedItems: WordItem[]) => {
+    const correct = placedItems.map((i) => i.word).join(" ") === line.words.join(" ");
     if (correct) {
       setStatus("correct");
-      popIn();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setTimeout(() => {
-        if (lineIndex + 1 >= totalLines) {
-          onComplete();
-        } else {
-          onCorrect();
-        }
-      }, 1000);
+      showBanner();
     } else {
       setStatus("wrong");
       shake();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       setTimeout(() => {
-        setAvailable(shuffle(line.words));
+        setAvailable(shuffleItems(line.words));
         setPlaced([]);
         setStatus("idle");
-      }, 800);
+      }, 900);
     }
   };
 
-  const surfaceColor = colors.isDark ? (colors as any).surface ?? "#1E1E32" : colors.card;
-  const correctColor = colors.isDark ? (colors as any).correct ?? "#58CC02" : "#58CC02";
-  const incorrectColor = colors.isDark ? (colors as any).incorrect ?? "#FF4B4B" : "#FF4B4B";
+  const handleContinue = () => {
+    if (lineIndex + 1 >= totalLines) {
+      onComplete();
+    } else {
+      onCorrect();
+    }
+  };
+
+  const surfaceColor = colors.isDark
+    ? (colors as any).surface ?? "#1E1E32"
+    : colors.card;
 
   const answerBg =
-    status === "correct" ? correctColor + "22" :
-    status === "wrong" ? incorrectColor + "22" :
-    surfaceColor;
+    status === "correct"
+      ? CORRECT_COLOR + "18"
+      : status === "wrong"
+      ? WRONG_COLOR + "18"
+      : surfaceColor;
 
   const answerBorder =
-    status === "correct" ? correctColor :
-    status === "wrong" ? incorrectColor :
-    colors.border;
+    status === "correct"
+      ? CORRECT_COLOR
+      : status === "wrong"
+      ? WRONG_COLOR
+      : colors.border;
 
   return (
     <View style={styles.container}>
@@ -138,7 +160,7 @@ export function WordBrickGame({ line, onCorrect, onComplete, lineIndex, totalLin
           {
             backgroundColor: answerBg,
             borderColor: answerBorder,
-            transform: [{ translateX: shakeAnim }, { scale: scaleAnim }],
+            transform: [{ translateX: shakeAnim }],
           },
         ]}
       >
@@ -148,24 +170,29 @@ export function WordBrickGame({ line, onCorrect, onComplete, lineIndex, totalLin
           </Text>
         ) : (
           <View style={styles.brickRow}>
-            {placed.map((word, i) => (
+            {placed.map((item, i) => (
               <TouchableOpacity
-                key={`placed-${i}`}
-                onPress={() => handleRemoveWord(word, i)}
-                style={[styles.brick, styles.placedBrick, { backgroundColor: colors.primary }]}
-                activeOpacity={0.7}
+                key={`placed-${i}-${item.wordIndex}`}
+                onPress={() => handleRemoveWord(item, i)}
+                style={[styles.brick, { backgroundColor: colors.primary }]}
+                activeOpacity={0.75}
+                disabled={status !== "idle"}
               >
-                <Text style={[styles.brickText, { color: "#fff" }]}>{word}</Text>
+                <Text style={styles.brickWordLight}>{item.word}</Text>
+                <Text style={styles.brickTransLight}>
+                  {line.wordTranslations[item.wordIndex]}
+                </Text>
               </TouchableOpacity>
             ))}
           </View>
         )}
+
         {status !== "idle" && (
           <View style={styles.statusIcon}>
             <Feather
               name={status === "correct" ? "check-circle" : "x-circle"}
-              size={22}
-              color={status === "correct" ? correctColor : incorrectColor}
+              size={20}
+              color={status === "correct" ? CORRECT_COLOR : WRONG_COLOR}
             />
           </View>
         )}
@@ -173,10 +200,10 @@ export function WordBrickGame({ line, onCorrect, onComplete, lineIndex, totalLin
 
       <View style={styles.availableZone}>
         <View style={styles.brickRow}>
-          {available.map((word, i) => (
+          {available.map((item, i) => (
             <TouchableOpacity
-              key={`avail-${i}`}
-              onPress={() => handlePickWord(word, i)}
+              key={`avail-${i}-${item.wordIndex}`}
+              onPress={() => handlePickWord(item, i)}
               style={[
                 styles.brick,
                 {
@@ -185,20 +212,71 @@ export function WordBrickGame({ line, onCorrect, onComplete, lineIndex, totalLin
                   borderWidth: 1,
                 },
               ]}
-              activeOpacity={0.7}
+              activeOpacity={0.75}
             >
-              <Text style={[styles.brickText, { color: colors.foreground }]}>{word}</Text>
+              <Text style={[styles.brickWord, { color: colors.foreground }]}>
+                {item.word}
+              </Text>
+              <Text style={[styles.brickTrans, { color: colors.mutedForeground }]}>
+                {line.wordTranslations[item.wordIndex]}
+              </Text>
             </TouchableOpacity>
           ))}
         </View>
       </View>
+
+      {status === "correct" && (
+        <Animated.View
+          style={[
+            styles.banner,
+            {
+              backgroundColor: CORRECT_COLOR + "15",
+              borderColor: CORRECT_COLOR,
+              opacity: bannerAnim,
+              transform: [
+                {
+                  translateY: bannerAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [16, 0],
+                  }),
+                },
+              ],
+            },
+          ]}
+        >
+          <View style={styles.bannerHeader}>
+            <Feather name="check-circle" size={18} color={CORRECT_COLOR} />
+            <Text style={[styles.bannerLabel, { color: CORRECT_COLOR }]}>
+              Bonne réponse !
+            </Text>
+          </View>
+
+          <Text style={[styles.bannerAr, { color: colors.foreground }]}>
+            {line.text}
+          </Text>
+          <Text style={[styles.bannerFr, { color: colors.mutedForeground }]}>
+            {line.translation}
+          </Text>
+
+          <TouchableOpacity
+            style={[styles.continueBtn, { backgroundColor: CORRECT_COLOR }]}
+            onPress={handleContinue}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.continueBtnText}>
+              {lineIndex + 1 >= totalLines ? "Terminer" : "Continuer"}
+            </Text>
+            <Feather name="arrow-right" size={16} color="#fff" />
+          </TouchableOpacity>
+        </Animated.View>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    gap: 16,
+    gap: 14,
   },
   header: {
     flexDirection: "row",
@@ -214,7 +292,7 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_600SemiBold",
   },
   answerZone: {
-    minHeight: 70,
+    minHeight: 72,
     borderRadius: 14,
     borderWidth: 2,
     padding: 12,
@@ -232,24 +310,80 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   brick: {
-    paddingHorizontal: 14,
-    paddingVertical: 9,
+    paddingHorizontal: 13,
+    paddingVertical: 7,
     borderRadius: 10,
+    alignItems: "center",
+    gap: 2,
   },
-  placedBrick: {
-  },
-  brickText: {
-    fontSize: 16,
+  brickWord: {
+    fontSize: 17,
     fontFamily: "Inter_600SemiBold",
     writingDirection: "rtl",
   },
+  brickTrans: {
+    fontSize: 10,
+    fontFamily: "Inter_400Regular",
+  },
+  brickWordLight: {
+    fontSize: 17,
+    fontFamily: "Inter_600SemiBold",
+    color: "#fff",
+    writingDirection: "rtl",
+  },
+  brickTransLight: {
+    fontSize: 10,
+    fontFamily: "Inter_400Regular",
+    color: "rgba(255,255,255,0.75)",
+  },
   availableZone: {
-    minHeight: 70,
+    minHeight: 72,
     justifyContent: "center",
   },
   statusIcon: {
     position: "absolute",
     top: 8,
     right: 8,
+  },
+  banner: {
+    borderRadius: 16,
+    borderWidth: 2,
+    padding: 16,
+    gap: 10,
+    marginTop: 4,
+  },
+  bannerHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  bannerLabel: {
+    fontSize: 14,
+    fontFamily: "Inter_700Bold",
+  },
+  bannerAr: {
+    fontSize: 20,
+    fontFamily: "Inter_600SemiBold",
+    textAlign: "right",
+    writingDirection: "rtl",
+  },
+  bannerFr: {
+    fontSize: 14,
+    fontFamily: "Inter_400Regular",
+    fontStyle: "italic",
+  },
+  continueBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 13,
+    borderRadius: 12,
+    marginTop: 4,
+  },
+  continueBtnText: {
+    color: "#fff",
+    fontSize: 15,
+    fontFamily: "Inter_700Bold",
   },
 });
