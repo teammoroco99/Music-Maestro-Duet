@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Platform,
   ScrollView,
@@ -13,7 +13,7 @@ import { Feather } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
 import { useProgress } from "@/context/ProgressContext";
 import { SONGS } from "@/data/songs";
-import { WordBrickGame } from "@/components/WordBrickGame";
+import { PairMatchGame } from "@/components/PairMatchGame";
 import { AudioPlayer } from "@/components/AudioPlayer";
 import { ProgressBar } from "@/components/ProgressBar";
 import * as Haptics from "expo-haptics";
@@ -26,8 +26,7 @@ export default function SongScreen() {
   const { setProgress } = useProgress();
 
   const song = useMemo(() => SONGS.find((s) => s.id === id), [id]);
-
-  const [currentLineIndex, setCurrentLineIndex] = useState(0);
+  const [currentBoardIndex, setCurrentBoardIndex] = useState(0);
   const [isComplete, setIsComplete] = useState(false);
 
   if (!song) {
@@ -38,14 +37,14 @@ export default function SongScreen() {
     );
   }
 
-  const lineProgress = (currentLineIndex / song.lyrics.length) * 100;
+  const boardProgress = (currentBoardIndex / song.boards.length) * 100;
 
-  const handleCorrect = useCallback(() => {
-    const next = currentLineIndex + 1;
-    setCurrentLineIndex(next);
-    const pct = (next / song.lyrics.length) * 100;
+  const handleNext = useCallback(() => {
+    const next = currentBoardIndex + 1;
+    setCurrentBoardIndex(next);
+    const pct = (next / song.boards.length) * 100;
     setProgress(song.id, pct);
-  }, [currentLineIndex, song]);
+  }, [currentBoardIndex, song]);
 
   const handleComplete = useCallback(() => {
     setIsComplete(true);
@@ -54,7 +53,7 @@ export default function SongScreen() {
   }, [song]);
 
   const handleRestart = () => {
-    setCurrentLineIndex(0);
+    setCurrentBoardIndex(0);
     setIsComplete(false);
   };
 
@@ -87,16 +86,21 @@ export default function SongScreen() {
             style={[styles.navSub, { color: colors.mutedForeground }]}
             numberOfLines={1}
           >
-            {song.title} · {song.year}
+            {song.title} · {song.year} · {song.boards.length} tableaux
           </Text>
         </View>
         <View
           style={[
             styles.colorDot,
-            { backgroundColor: song.coverColor + "33", borderColor: song.coverColor + "55" },
+            {
+              backgroundColor: song.coverColor + "33",
+              borderColor: song.coverColor + "55",
+            },
           ]}
         >
-          <View style={[styles.colorDotInner, { backgroundColor: song.coverColor }]} />
+          <View
+            style={[styles.colorDotInner, { backgroundColor: song.coverColor }]}
+          />
         </View>
       </View>
 
@@ -113,26 +117,34 @@ export default function SongScreen() {
 
         <View style={styles.gameSection}>
           <View style={styles.progressSection}>
-            <ProgressBar progress={isComplete ? 100 : lineProgress} />
-            {isComplete && (
-              <Text style={[styles.completedLabel, { color: "#58CC02" }]}>
-                Complété !
+            <ProgressBar progress={isComplete ? 100 : boardProgress} />
+            <View style={styles.progressLabels}>
+              <Text style={[styles.progressText, { color: colors.mutedForeground }]}>
+                {isComplete
+                  ? "Complété !"
+                  : `Tableau ${currentBoardIndex + 1} / ${song.boards.length}`}
               </Text>
-            )}
+              {isComplete && (
+                <Text style={[styles.completeLabel, { color: "#58CC02" }]}>
+                  ✓ Maîtrisé
+                </Text>
+              )}
+            </View>
           </View>
 
           {isComplete ? (
             <View style={styles.completeCard}>
               <View style={[styles.awardBadge, { backgroundColor: "#58CC0222" }]}>
-                <Feather name="award" size={40} color="#58CC02" />
+                <Feather name="award" size={48} color="#58CC02" />
               </View>
               <Text style={[styles.completeTitle, { color: colors.foreground }]}>
-                Bravo ! Tu as réussi !
+                Bravo ! Tu as maîtrisé cette chanson !
               </Text>
               <Text
                 style={[styles.completeSub, { color: colors.mutedForeground }]}
               >
-                Tu connais maintenant les paroles de {song.titleAr}
+                Tu viens de travailler {song.boards.length} tableaux de {song.titleAr}{" "}
+                et tu connais maintenant tout le vocabulaire de cette chanson.
               </Text>
               <TouchableOpacity
                 style={[styles.restartBtn, { backgroundColor: colors.primary }]}
@@ -140,7 +152,7 @@ export default function SongScreen() {
                 activeOpacity={0.8}
               >
                 <Feather name="refresh-cw" size={16} color="#fff" />
-                <Text style={styles.restartText}>Recommencer</Text>
+                <Text style={styles.restartText}>Recommencer depuis le début</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[
@@ -156,13 +168,13 @@ export default function SongScreen() {
               </TouchableOpacity>
             </View>
           ) : (
-            <WordBrickGame
-              key={currentLineIndex}
-              line={song.lyrics[currentLineIndex]}
-              onCorrect={handleCorrect}
+            <PairMatchGame
+              key={currentBoardIndex}
+              board={song.boards[currentBoardIndex]}
+              boardIndex={currentBoardIndex}
+              totalBoards={song.boards.length}
+              onNext={handleNext}
               onComplete={handleComplete}
-              lineIndex={currentLineIndex}
-              totalLines={song.lyrics.length}
             />
           )}
         </View>
@@ -220,10 +232,18 @@ const styles = StyleSheet.create({
   progressSection: {
     gap: 8,
   },
-  completedLabel: {
-    fontSize: 13,
+  progressLabels: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  progressText: {
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+  },
+  completeLabel: {
+    fontSize: 12,
     fontFamily: "Inter_600SemiBold",
-    textAlign: "right",
   },
   completeCard: {
     alignItems: "center",
@@ -231,22 +251,23 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
   },
   awardBadge: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
     alignItems: "center",
     justifyContent: "center",
   },
   completeTitle: {
-    fontSize: 24,
+    fontSize: 22,
     fontFamily: "Inter_700Bold",
     textAlign: "center",
   },
   completeSub: {
-    fontSize: 15,
+    fontSize: 14,
     fontFamily: "Inter_400Regular",
     textAlign: "center",
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
+    lineHeight: 22,
   },
   restartBtn: {
     flexDirection: "row",
@@ -261,7 +282,7 @@ const styles = StyleSheet.create({
   },
   restartText: {
     color: "#fff",
-    fontSize: 16,
+    fontSize: 15,
     fontFamily: "Inter_600SemiBold",
   },
   backHomeBtn: {

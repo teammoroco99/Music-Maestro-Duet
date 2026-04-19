@@ -24,6 +24,10 @@ export function AudioPlayer({ previewUrl, songTitle, coverColor, coverImage }: P
   const player = useAudioPlayer({ uri: previewUrl });
   const status = useAudioPlayerStatus(player);
 
+  useEffect(() => {
+    player.loop = true;
+  }, [player]);
+
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const vinylAnim = useRef(new Animated.Value(0)).current;
   const pulseLoop = useRef<Animated.CompositeAnimation | null>(null);
