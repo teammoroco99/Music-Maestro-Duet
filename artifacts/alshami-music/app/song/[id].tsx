@@ -8,13 +8,13 @@ import {
   View,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { WebView } from "react-native-webview";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
 import { useProgress } from "@/context/ProgressContext";
 import { SONGS } from "@/data/songs";
 import { WordBrickGame } from "@/components/WordBrickGame";
+import { AudioPlayer } from "@/components/AudioPlayer";
 import { ProgressBar } from "@/components/ProgressBar";
 import * as Haptics from "expo-haptics";
 
@@ -23,13 +23,12 @@ export default function SongScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { progress, setProgress } = useProgress();
+  const { setProgress } = useProgress();
 
   const song = useMemo(() => SONGS.find((s) => s.id === id), [id]);
 
   const [currentLineIndex, setCurrentLineIndex] = useState(0);
   const [isComplete, setIsComplete] = useState(false);
-  const [showVideo, setShowVideo] = useState(true);
 
   if (!song) {
     return (
@@ -39,7 +38,7 @@ export default function SongScreen() {
     );
   }
 
-  const lineProgress = ((currentLineIndex) / song.lyrics.length) * 100;
+  const lineProgress = (currentLineIndex / song.lyrics.length) * 100;
 
   const handleCorrect = useCallback(() => {
     const next = currentLineIndex + 1;
@@ -62,86 +61,76 @@ export default function SongScreen() {
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
 
-  const youtubeEmbed = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta name="viewport" content="width=device-width, initial-scale=1">
-      <style>body{margin:0;background:#000;}iframe{width:100%;height:100%;border:none;}</style>
-    </head>
-    <body>
-      <iframe 
-        src="https://www.youtube.com/embed/${song.youtubeId}?playsinline=1&rel=0&modestbranding=1"
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-        allowfullscreen>
-      </iframe>
-    </body>
-    </html>
-  `;
-
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.navBar, { paddingTop: topPad, backgroundColor: colors.background, borderBottomColor: colors.border }]}>
+      <View
+        style={[
+          styles.navBar,
+          {
+            paddingTop: topPad,
+            backgroundColor: colors.background,
+            borderBottomColor: colors.border,
+          },
+        ]}
+      >
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
           <Feather name="arrow-left" size={22} color={colors.foreground} />
         </TouchableOpacity>
         <View style={styles.navCenter}>
-          <Text style={[styles.navTitle, { color: colors.foreground }]} numberOfLines={1}>
+          <Text
+            style={[styles.navTitle, { color: colors.foreground }]}
+            numberOfLines={1}
+          >
             {song.titleAr}
           </Text>
-          <Text style={[styles.navSub, { color: colors.mutedForeground }]} numberOfLines={1}>
-            {song.title}
+          <Text
+            style={[styles.navSub, { color: colors.mutedForeground }]}
+            numberOfLines={1}
+          >
+            {song.title} · {song.year}
           </Text>
         </View>
-        <TouchableOpacity
-          onPress={() => setShowVideo((v) => !v)}
-          style={[styles.toggleBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+        <View
+          style={[
+            styles.colorDot,
+            { backgroundColor: song.coverColor + "33", borderColor: song.coverColor + "55" },
+          ]}
         >
-          <Feather name={showVideo ? "eye-off" : "eye"} size={18} color={colors.mutedForeground} />
-        </TouchableOpacity>
+          <View style={[styles.colorDotInner, { backgroundColor: song.coverColor }]} />
+        </View>
       </View>
 
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: bottomPad + 32 }}
       >
-        {showVideo && (
-          <View style={styles.videoContainer}>
-            {Platform.OS === "web" ? (
-              <iframe
-                src={`https://www.youtube.com/embed/${song.youtubeId}?playsinline=1&rel=0&modestbranding=1`}
-                style={{ width: "100%", height: "100%", border: "none" } as any}
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              />
-            ) : (
-              <WebView
-                source={{ html: youtubeEmbed }}
-                style={styles.webview}
-                allowsInlineMediaPlayback
-                mediaPlaybackRequiresUserAction={false}
-                javaScriptEnabled
-              />
-            )}
-          </View>
-        )}
+        <AudioPlayer
+          previewUrl={song.previewUrl}
+          songTitle={song.titleAr}
+          coverColor={song.coverColor}
+        />
 
         <View style={styles.gameSection}>
           <View style={styles.progressSection}>
             <ProgressBar progress={isComplete ? 100 : lineProgress} />
             {isComplete && (
-              <Text style={[styles.completedLabel, { color: "#58CC02" }]}>Complété!</Text>
+              <Text style={[styles.completedLabel, { color: "#58CC02" }]}>
+                Complété !
+              </Text>
             )}
           </View>
 
           {isComplete ? (
             <View style={styles.completeCard}>
-              <View style={[styles.badge, { backgroundColor: "#58CC0222" }]}>
+              <View style={[styles.awardBadge, { backgroundColor: "#58CC0222" }]}>
                 <Feather name="award" size={40} color="#58CC02" />
               </View>
               <Text style={[styles.completeTitle, { color: colors.foreground }]}>
-                Bravo! Tu as réussi!
+                Bravo ! Tu as réussi !
               </Text>
-              <Text style={[styles.completeSub, { color: colors.mutedForeground }]}>
+              <Text
+                style={[styles.completeSub, { color: colors.mutedForeground }]}
+              >
                 Tu connais maintenant les paroles de {song.titleAr}
               </Text>
               <TouchableOpacity
@@ -153,7 +142,10 @@ export default function SongScreen() {
                 <Text style={styles.restartText}>Recommencer</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.backHomeBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+                style={[
+                  styles.backHomeBtn,
+                  { backgroundColor: colors.card, borderColor: colors.border },
+                ]}
                 onPress={() => router.back()}
                 activeOpacity={0.8}
               >
@@ -207,22 +199,18 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: "Inter_400Regular",
   },
-  toggleBtn: {
+  colorDot: {
     width: 36,
     height: 36,
-    borderRadius: 8,
+    borderRadius: 18,
     borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
   },
-  videoContainer: {
-    width: "100%",
-    aspectRatio: 16 / 9,
-    backgroundColor: "#000",
-  },
-  webview: {
-    flex: 1,
-    backgroundColor: "#000",
+  colorDotInner: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
   },
   gameSection: {
     padding: 20,
@@ -241,7 +229,7 @@ const styles = StyleSheet.create({
     gap: 16,
     paddingVertical: 16,
   },
-  badge: {
+  awardBadge: {
     width: 90,
     height: 90,
     borderRadius: 45,

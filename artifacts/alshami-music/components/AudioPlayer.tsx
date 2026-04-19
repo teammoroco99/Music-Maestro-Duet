@@ -6,7 +6,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { Audio } from "expo-av";
+import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 import { Feather } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
 
@@ -18,33 +18,23 @@ interface Props {
 
 export function AudioPlayer({ previewUrl, songTitle, coverColor }: Props) {
   const colors = useColors();
-  const soundRef = useRef<Audio.Sound | null>(null);
 
-  const [isLoading, setIsLoading] = useState(false);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [position, setPosition] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const [error, setError] = useState(false);
+  const player = useAudioPlayer({ uri: previewUrl });
+  const status = useAudioPlayerStatus(player);
 
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const pulseLoop = useRef<Animated.CompositeAnimation | null>(null);
 
-  useEffect(() => {
-    Audio.setAudioModeAsync({
-      playsInSilentModeIOS: true,
-      staysActiveInBackground: false,
-    });
-    return () => {
-      soundRef.current?.unloadAsync();
-    };
-  }, []);
+  const isPlaying = status.playing;
+  const position = status.currentTime ?? 0;
+  const duration = status.duration ?? 0;
 
   useEffect(() => {
     if (isPlaying) {
       pulseLoop.current = Animated.loop(
         Animated.sequence([
           Animated.timing(pulseAnim, {
-            toValue: 1.12,
+            toValue: 1.1,
             duration: 700,
             useNativeDriver: true,
           }),
@@ -66,70 +56,41 @@ export function AudioPlayer({ previewUrl, songTitle, coverColor }: Props) {
     }
   }, [isPlaying]);
 
-  const formatTime = (ms: number) => {
-    const s = Math.floor(ms / 1000);
-    const m = Math.floor(s / 60);
-    const sec = s % 60;
-    return `${m}:${sec.toString().padStart(2, "0")}`;
+  const formatTime = (sec: number) => {
+    const m = Math.floor(sec / 60);
+    const s = Math.floor(sec % 60);
+    return `${m}:${s.toString().padStart(2, "0")}`;
   };
 
-  const handlePlayPause = async () => {
-    try {
-      setError(false);
-
-      if (soundRef.current) {
-        if (isPlaying) {
-          await soundRef.current.pauseAsync();
-          setIsPlaying(false);
-        } else {
-          await soundRef.current.playAsync();
-          setIsPlaying(true);
-        }
-        return;
-      }
-
-      setIsLoading(true);
-      const { sound } = await Audio.Sound.createAsync(
-        { uri: previewUrl },
-        { shouldPlay: true },
-        (status) => {
-          if (!status.isLoaded) return;
-          setPosition(status.positionMillis ?? 0);
-          setDuration(status.durationMillis ?? 0);
-          setIsPlaying(status.isPlaying);
-          if (status.didJustFinish) {
-            setIsPlaying(false);
-            setPosition(0);
-          }
-        }
-      );
-      soundRef.current = sound;
-      setIsPlaying(true);
-      setIsLoading(false);
-    } catch (e) {
-      setIsLoading(false);
-      setError(true);
+  const handlePlayPause = () => {
+    if (isPlaying) {
+      player.pause();
+    } else {
+      player.play();
     }
   };
 
   const progress = duration > 0 ? position / duration : 0;
+
   const surfaceColor = colors.isDark
     ? (colors as any).surface ?? "#1E1E32"
     : colors.card;
 
   return (
-    <View style={[styles.container, { backgroundColor: surfaceColor, borderColor: colors.border }]}>
+    <View
+      style={[
+        styles.container,
+        { backgroundColor: surfaceColor, borderColor: colors.border },
+      ]}
+    >
       <View style={styles.row}>
         <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
           <TouchableOpacity
             onPress={handlePlayPause}
-            disabled={isLoading}
             style={[styles.playBtn, { backgroundColor: coverColor }]}
             activeOpacity={0.85}
           >
-            {isLoading ? (
-              <Feather name="loader" size={26} color="#fff" />
-            ) : isPlaying ? (
+            {isPlaying ? (
               <Feather name="pause" size={26} color="#fff" />
             ) : (
               <Feather name="play" size={26} color="#fff" />
@@ -139,15 +100,12 @@ export function AudioPlayer({ previewUrl, songTitle, coverColor }: Props) {
 
         <View style={styles.info}>
           <Text style={[styles.label, { color: colors.mutedForeground }]}>
-            {isLoading
-              ? "Chargement..."
-              : isPlaying
-              ? "En écoute · Extrait 30s"
-              : error
-              ? "Erreur de lecture"
-              : "Appuie pour écouter"}
+            {isPlaying ? "En écoute · Extrait 30s" : "Appuie pour écouter"}
           </Text>
-          <Text style={[styles.title, { color: colors.foreground }]} numberOfLines={1}>
+          <Text
+            style={[styles.title, { color: colors.foreground }]}
+            numberOfLines={1}
+          >
             {songTitle}
           </Text>
 
@@ -156,7 +114,10 @@ export function AudioPlayer({ previewUrl, songTitle, coverColor }: Props) {
               <View
                 style={[
                   styles.trackFill,
-                  { backgroundColor: coverColor, width: `${progress * 100}%` },
+                  {
+                    backgroundColor: coverColor,
+                    width: `${Math.min(progress * 100, 100)}%`,
+                  },
                 ]}
               />
             </View>
