@@ -108,6 +108,7 @@ export default function SongScreen() {
           previewUrl={song.previewUrl}
           songTitle={song.titleAr}
           coverColor={song.coverColor}
+          coverImage={song.coverImage}
         />
 
         <View style={styles.gameSection}>

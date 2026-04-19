@@ -5,6 +5,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { Image } from "expo-image";
 import { Feather } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
 import { Song } from "@/data/songs";
@@ -36,9 +37,15 @@ export function SongCard({ song, onPress, progress = 0 }: Props) {
       onPress={onPress}
       activeOpacity={0.8}
     >
-      <View style={[styles.colorBar, { backgroundColor: song.coverColor }]}>
-        <Feather name="music" size={28} color="#fff" />
+      <View style={[styles.coverWrapper, { backgroundColor: song.coverColor }]}>
+        <Image
+          source={{ uri: song.coverImage }}
+          style={styles.cover}
+          contentFit="cover"
+          transition={200}
+        />
       </View>
+
       <View style={styles.info}>
         <Text style={[styles.titleAr, { color: colors.foreground }]} numberOfLines={1}>
           {song.titleAr}
@@ -87,11 +94,13 @@ const styles = StyleSheet.create({
     marginVertical: 6,
     overflow: "hidden",
   },
-  colorBar: {
-    width: 64,
-    height: 74,
-    alignItems: "center",
-    justifyContent: "center",
+  coverWrapper: {
+    width: 70,
+    height: 70,
+  },
+  cover: {
+    width: 70,
+    height: 70,
   },
   info: {
     flex: 1,

@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { Image } from "expo-image";
 import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 import { Feather } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
@@ -14,16 +15,19 @@ interface Props {
   previewUrl: string;
   songTitle: string;
   coverColor: string;
+  coverImage: string;
 }
 
-export function AudioPlayer({ previewUrl, songTitle, coverColor }: Props) {
+export function AudioPlayer({ previewUrl, songTitle, coverColor, coverImage }: Props) {
   const colors = useColors();
 
   const player = useAudioPlayer({ uri: previewUrl });
   const status = useAudioPlayerStatus(player);
 
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  const vinylAnim = useRef(new Animated.Value(0)).current;
   const pulseLoop = useRef<Animated.CompositeAnimation | null>(null);
+  const vinylLoop = useRef<Animated.CompositeAnimation | null>(null);
 
   const isPlaying = status.playing;
   const position = status.currentTime ?? 0;
@@ -33,28 +37,27 @@ export function AudioPlayer({ previewUrl, songTitle, coverColor }: Props) {
     if (isPlaying) {
       pulseLoop.current = Animated.loop(
         Animated.sequence([
-          Animated.timing(pulseAnim, {
-            toValue: 1.1,
-            duration: 700,
-            useNativeDriver: true,
-          }),
-          Animated.timing(pulseAnim, {
-            toValue: 1,
-            duration: 700,
-            useNativeDriver: true,
-          }),
+          Animated.timing(pulseAnim, { toValue: 1.06, duration: 800, useNativeDriver: true }),
+          Animated.timing(pulseAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
         ])
       );
       pulseLoop.current.start();
+
+      vinylLoop.current = Animated.loop(
+        Animated.timing(vinylAnim, { toValue: 1, duration: 3000, useNativeDriver: true })
+      );
+      vinylLoop.current.start();
     } else {
       pulseLoop.current?.stop();
-      Animated.timing(pulseAnim, {
-        toValue: 1,
-        duration: 150,
-        useNativeDriver: true,
-      }).start();
+      vinylLoop.current?.stop();
+      Animated.timing(pulseAnim, { toValue: 1, duration: 150, useNativeDriver: true }).start();
     }
   }, [isPlaying]);
+
+  const spin = vinylAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ["0deg", "360deg"],
+  });
 
   const formatTime = (sec: number) => {
     const m = Math.floor(sec / 60);
@@ -71,41 +74,27 @@ export function AudioPlayer({ previewUrl, songTitle, coverColor }: Props) {
   };
 
   const progress = duration > 0 ? position / duration : 0;
-
-  const surfaceColor = colors.isDark
-    ? (colors as any).surface ?? "#1E1E32"
-    : colors.card;
+  const surfaceColor = colors.isDark ? (colors as any).surface ?? "#1E1E32" : colors.card;
 
   return (
-    <View
-      style={[
-        styles.container,
-        { backgroundColor: surfaceColor, borderColor: colors.border },
-      ]}
-    >
-      <View style={styles.row}>
-        <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
-          <TouchableOpacity
-            onPress={handlePlayPause}
-            style={[styles.playBtn, { backgroundColor: coverColor }]}
-            activeOpacity={0.85}
-          >
-            {isPlaying ? (
-              <Feather name="pause" size={26} color="#fff" />
-            ) : (
-              <Feather name="play" size={26} color="#fff" />
-            )}
-          </TouchableOpacity>
+    <View style={[styles.container, { backgroundColor: surfaceColor, borderColor: colors.border }]}>
+      <View style={styles.main}>
+        <Animated.View style={[styles.coverContainer, { transform: [{ rotate: isPlaying ? spin : "0deg" }] }]}>
+          <Image
+            source={{ uri: coverImage }}
+            style={styles.cover}
+            contentFit="cover"
+            transition={200}
+          />
+          <View style={[styles.coverOverlay, { backgroundColor: coverColor + "44" }]} />
+          <View style={styles.vinylCenter} />
         </Animated.View>
 
-        <View style={styles.info}>
+        <View style={styles.details}>
           <Text style={[styles.label, { color: colors.mutedForeground }]}>
-            {isPlaying ? "En écoute · Extrait 30s" : "Appuie pour écouter"}
+            {isPlaying ? "▶ En écoute" : "Extrait 30s"}
           </Text>
-          <Text
-            style={[styles.title, { color: colors.foreground }]}
-            numberOfLines={1}
-          >
+          <Text style={[styles.songTitle, { color: colors.foreground }]} numberOfLines={2}>
             {songTitle}
           </Text>
 
@@ -114,17 +103,27 @@ export function AudioPlayer({ previewUrl, songTitle, coverColor }: Props) {
               <View
                 style={[
                   styles.trackFill,
-                  {
-                    backgroundColor: coverColor,
-                    width: `${Math.min(progress * 100, 100)}%`,
-                  },
+                  { backgroundColor: coverColor, width: `${Math.min(progress * 100, 100)}%` },
                 ]}
               />
             </View>
             <Text style={[styles.time, { color: colors.mutedForeground }]}>
-              {duration > 0 ? formatTime(position) : "--:--"}
+              {duration > 0 ? formatTime(position) : "0:30"}
             </Text>
           </View>
+
+          <Animated.View style={{ transform: [{ scale: pulseAnim }], alignSelf: "flex-start" }}>
+            <TouchableOpacity
+              onPress={handlePlayPause}
+              style={[styles.playBtn, { backgroundColor: coverColor }]}
+              activeOpacity={0.85}
+            >
+              <Feather name={isPlaying ? "pause" : "play"} size={18} color="#fff" />
+              <Text style={styles.playBtnText}>
+                {isPlaying ? "Pause" : "ÉCOUTER"}
+              </Text>
+            </TouchableOpacity>
+          </Animated.View>
         </View>
       </View>
 
@@ -146,38 +145,58 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
     marginTop: 16,
   },
-  row: {
+  main: {
     flexDirection: "row",
-    alignItems: "center",
-    padding: 16,
     gap: 14,
+    padding: 16,
   },
-  playBtn: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
-    alignItems: "center",
-    justifyContent: "center",
+  coverContainer: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    overflow: "hidden",
+    position: "relative",
   },
-  info: {
+  cover: {
+    width: 90,
+    height: 90,
+  },
+  coverOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 45,
+  },
+  vinylCenter: {
+    position: "absolute",
+    top: "50%",
+    left: "50%",
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: "#0E0E16",
+    borderWidth: 3,
+    borderColor: "#333",
+    transform: [{ translateX: -9 }, { translateY: -9 }],
+  },
+  details: {
     flex: 1,
-    gap: 4,
+    gap: 6,
+    justifyContent: "center",
   },
   label: {
     fontSize: 11,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Inter_500Medium",
     textTransform: "uppercase",
-    letterSpacing: 0.5,
+    letterSpacing: 0.8,
   },
-  title: {
-    fontSize: 16,
-    fontFamily: "Inter_600SemiBold",
+  songTitle: {
+    fontSize: 18,
+    fontFamily: "Inter_700Bold",
+    lineHeight: 22,
   },
   progressRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    marginTop: 4,
   },
   trackBg: {
     flex: 1,
@@ -192,7 +211,22 @@ const styles = StyleSheet.create({
   time: {
     fontSize: 11,
     fontFamily: "Inter_400Regular",
-    minWidth: 32,
+    minWidth: 28,
+  },
+  playBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginTop: 2,
+  },
+  playBtnText: {
+    color: "#fff",
+    fontSize: 13,
+    fontFamily: "Inter_700Bold",
+    letterSpacing: 0.5,
   },
   hint: {
     flexDirection: "row",
