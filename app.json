@@ -1,0 +1,15 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "84500a7f-e453-4bfc-a088-a43e0bedada0"
+      }
+    },
+    "ios": {
+      "bundleIdentifier": "com.siham019.workspace",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    }
+  }
+}
